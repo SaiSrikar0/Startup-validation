@@ -1,0 +1,3 @@
+### Thinking of Startup analysis 
+
+.....
