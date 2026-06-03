@@ -24,8 +24,12 @@ from sklearn.metrics import (
     roc_auc_score, f1_score, roc_curve
 )
 
-from utils.feature_engineering import StartupFeatureEngineer
-from utils.ann_model import build_ann, train, save_model, load_model
+try:
+    from utils.feature_engineering import StartupFeatureEngineer
+    from utils.ann_model import build_ann, train, save_model, load_model
+except ModuleNotFoundError:
+    from feature_engineering import StartupFeatureEngineer
+    from ann_model import build_ann, train, save_model, load_model
 
 OUTPUTS = Path("outputs")
 OUTPUTS.mkdir(exist_ok=True)

@@ -87,7 +87,7 @@ def build_ann(input_dim: int, class_weight_ratio: float = 1.0) -> tf.keras.Model
 
 def get_callbacks(checkpoint_path: Path) -> list:
     """Standard training callbacks."""
-    return [
+    cbs = [
         callbacks.EarlyStopping(
             monitor="val_auc", patience=15,
             restore_best_weights=True, mode="max", verbose=1
@@ -101,11 +101,20 @@ def get_callbacks(checkpoint_path: Path) -> list:
             monitor="val_auc", save_best_only=True,
             mode="max", verbose=1
         ),
-        callbacks.TensorBoard(
-            log_dir=str(MODELS_DIR / "logs"),
-            histogram_freq=1
-        ),
     ]
+
+    try:
+        import tensorboard  # noqa: F401
+        cbs.append(
+            callbacks.TensorBoard(
+                log_dir=str(MODELS_DIR / "logs"),
+                histogram_freq=1
+            )
+        )
+    except ImportError:
+        print("[ANN] TensorBoard not installed, skipping TensorBoard callback.")
+
+    return cbs
 
 
 def train(

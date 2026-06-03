@@ -15,8 +15,12 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from utils.feature_engineering import StartupFeatureEngineer
-from utils.ann_model import load_model
+try:
+    from utils.feature_engineering import StartupFeatureEngineer
+    from utils.ann_model import load_model
+except ModuleNotFoundError:
+    from feature_engineering import StartupFeatureEngineer
+    from ann_model import load_model
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
