@@ -6,8 +6,8 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from pathlib import Path
 
-# 1. Resolve relative directory paths
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+# Move up 5 levels to reach the true root repository folder 'Startup-validation'
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent
 DATA_PATH = BASE_DIR / "database" / "data" / "cleaned" / "Startups_cleaned.csv"
 MODEL_DIR = Path(__file__).resolve().parent.parent.parent / "models"
 
@@ -19,10 +19,9 @@ def load_and_prepare_data():
     df = pd.read_csv(DATA_PATH)
     
     # --- MOCK PREPARATION LOGIC ---
-    # Replace these strings with your database team's exact target column 
+    # Replace these with your database team's exact target column 
     # and feature matrix columns once finalized.
-    # Assuming the last column is the target binary flag (1 = Success, 0 = Fail)
-    X = np.random.randn(len(df), 5)  # Let's assume 5 features for now
+    X = np.random.randn(len(df), 5)  # Assuming 5 features for now
     y = np.random.randint(0, 2, size=(len(df), 1))
     
     return X, y
@@ -34,7 +33,7 @@ def build_ann(input_dim):
         Dropout(0.3),
         Dense(16, activation='relu'),
         Dropout(0.2),
-        Dense(1, activation='sigmoid')  # Sigmoid maps outputs to a 0.0 - 1.0 probability range
+        Dense(1, activation='sigmoid')  # Outputs a 0.0 - 1.0 probability score
     ])
     
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
