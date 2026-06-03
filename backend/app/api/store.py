@@ -101,6 +101,16 @@ class StartupStore:
         with self._lock:
             return list(self._items.values())
 
+    def find_by_company(self, company: str) -> StartupRecord | None:
+        name = company.strip().lower()
+        for record in self.list():
+            if record.company.strip().lower() == name:
+                return record
+        return None
+
+    def stable_id_for_company(self, company: str) -> str:
+        return _stable_id(company, company)
+
     def get(self, startup_id: str) -> StartupRecord | None:
         with self._lock:
             return self._items.get(startup_id)
@@ -157,6 +167,13 @@ class StartupStore:
             return filtered[offset : offset + limit], total
 
     def predict(self, payload: PredictionRequest) -> PredictionResponse:
+        try:
+            from ..models.ANN_Model.predictor import predict_with_ann
+
+            return predict_with_ann(payload)
+        except Exception:
+            pass
+
         score = 0.28
         factors: list[str] = []
 
@@ -208,9 +225,17 @@ class StartupStore:
             probability=round(score, 3),
             confidence=confidence,
             factors=factors or ["No strong signals found, using baseline score"],
+            model_name="heuristic-fallback",
         )
 
     def analyze_competition(self, payload: CompetitionAnalysisRequest) -> CompetitionAnalysisResponse:
+        try:
+            from ..competitor_analysis.competition_service import analyze_with_ml
+
+            return analyze_with_ml(payload, self)
+        except Exception:
+            pass
+
         target_categories = {item.lower() for item in payload.categories}
         candidates: list[CompetitionMatch] = []
 

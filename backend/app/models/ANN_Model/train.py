@@ -24,12 +24,8 @@ from sklearn.metrics import (
     roc_auc_score, f1_score, roc_curve
 )
 
-try:
-    from utils.feature_engineering import StartupFeatureEngineer
-    from utils.ann_model import build_ann, train, save_model, load_model
-except ModuleNotFoundError:
-    from feature_engineering import StartupFeatureEngineer
-    from ann_model import build_ann, train, save_model, load_model
+from .feature_engineering import StartupFeatureEngineer
+from .ann_model import build_ann, train, save_model, load_model
 
 OUTPUTS = Path("outputs")
 OUTPUTS.mkdir(exist_ok=True)
@@ -90,7 +86,7 @@ def evaluate(model, X_test, y_test, threshold: float = 0.5):
     plt.tight_layout()
     plt.savefig(OUTPUTS / "evaluation.png", dpi=150)
     plt.close()
-    print(f"[Train] Evaluation plots saved → {OUTPUTS / 'evaluation.png'}")
+    print(f"[Train] Evaluation plots saved -> {OUTPUTS / 'evaluation.png'}")
 
     # Save metrics JSON
     metrics = {"auc": round(auc, 4), "f1": round(f1, 4)}
@@ -116,12 +112,12 @@ def plot_history(history):
     plt.tight_layout()
     plt.savefig(OUTPUTS / "training_history.png", dpi=150)
     plt.close()
-    print(f"[Train] Training history saved → {OUTPUTS / 'training_history.png'}")
+    print(f"[Train] Training history saved -> {OUTPUTS / 'training_history.png'}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main(data_path: str, label_col: str = "label", test_size: float = 0.2):
+def main(data_path: str, label_col: str = "label", test_size: float = 0.2, epochs: int = 100):
     print(f"\n[Train] Loading data from {data_path}")
     df = pd.read_csv(data_path, encoding="latin-1")
     print(f"[Train] Loaded {len(df)} rows, {df.shape[1]} columns")
@@ -131,10 +127,10 @@ def main(data_path: str, label_col: str = "label", test_size: float = 0.2):
         y = df[label_col].astype(int).values
         print(f"[Train] Using '{label_col}' column for labels (from Member 3)")
     else:
-        print(f"[Train] '{label_col}' not found — using heuristic labels (temporary)")
+        print(f"[Train] '{label_col}' not found - using heuristic labels (temporary)")
         y = _heuristic_label(df).values
 
-    print(f"[Train] Class distribution — 0 (fail): {(y==0).sum()}  |  1 (success): {(y==1).sum()}")
+    print(f"[Train] Class distribution - 0 (fail): {(y==0).sum()}  |  1 (success): {(y==1).sum()}")
 
     # ── Feature engineering ───────────────────────────────────────────────────
     fe = StartupFeatureEngineer()
@@ -149,7 +145,7 @@ def main(data_path: str, label_col: str = "label", test_size: float = 0.2):
     X_train, X_val, y_train, y_val = train_test_split(
         X_trainval, y_trainval, test_size=0.15, random_state=42, stratify=y_trainval
     )
-    print(f"[Train] Split → train:{len(X_train)}  val:{len(X_val)}  test:{len(X_test)}")
+    print(f"[Train] Split -> train:{len(X_train)}  val:{len(X_val)}  test:{len(X_test)}")
 
     # ── Class weights (from label distribution) ───────────────────────────────
     n_neg, n_pos = (y_train == 0).sum(), (y_train == 1).sum()
@@ -163,7 +159,7 @@ def main(data_path: str, label_col: str = "label", test_size: float = 0.2):
     history = train(
         model, X_train, y_train, X_val, y_val,
         class_weight=class_weight,
-        epochs=100,
+        epochs=epochs,
         batch_size=32,
     )
 
@@ -175,7 +171,7 @@ def main(data_path: str, label_col: str = "label", test_size: float = 0.2):
     # ── Save final model ──────────────────────────────────────────────────────
     save_model(model)
 
-    print("\n[Train] ✓ Training complete.")
+    print("\n[Train] Training complete.")
     print(f"         AUC-ROC = {metrics['auc']}   F1 = {metrics['f1']}")
     print("         Artifacts saved under models/ and outputs/")
 
@@ -185,6 +181,7 @@ if __name__ == "__main__":
     parser.add_argument("--data",      default="data/Startups.csv", help="Path to the CSV dataset")
     parser.add_argument("--label_col", default="label",             help="Column with binary labels (from Member 3)")
     parser.add_argument("--test_size", type=float, default=0.2,     help="Fraction held out for testing")
+    parser.add_argument("--epochs", type=int, default=100,        help="Training epochs")
     args = parser.parse_args()
 
-    main(args.data, args.label_col, args.test_size)
+    main(args.data, args.label_col, args.test_size, args.epochs)

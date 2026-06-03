@@ -9,6 +9,14 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true
+      },
+      '/competitors': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      },
+      '/ann': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
       }
     }
   }

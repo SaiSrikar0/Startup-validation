@@ -24,7 +24,7 @@ from pathlib import Path
 from tensorflow.keras import layers, callbacks, regularizers
 
 
-MODELS_DIR = Path(__file__).parent.parent / "models"
+MODELS_DIR = Path(__file__).parent
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -142,7 +142,7 @@ def train(
         n_pos = int((y_train == 1).sum())
         total = n_neg + n_pos
         class_weight = {0: total / (2 * n_neg), 1: total / (2 * n_pos)}
-        print(f"[ANN] Auto class weights — 0: {class_weight[0]:.3f}, 1: {class_weight[1]:.3f}")
+        print(f"[ANN] Auto class weights - 0: {class_weight[0]:.3f}, 1: {class_weight[1]:.3f}")
 
     history = model.fit(
         X_train, y_train,
@@ -160,10 +160,23 @@ def train(
 
 def save_model(model: tf.keras.Model, path: Path = MODELS_DIR / "ann_final.keras"):
     model.save(path)
-    print(f"[ANN] Model saved → {path}")
+    print(f"[ANN] Model saved -> {path}")
 
 
-def load_model(path: Path = MODELS_DIR / "best_model.keras") -> tf.keras.Model:
-    model = tf.keras.models.load_model(path)
-    print(f"[ANN] Model loaded ← {path}")
-    return model
+def load_model(path: Path | None = None) -> tf.keras.Model:
+    candidates = [
+        path,
+        MODELS_DIR / "best_model.keras",
+        MODELS_DIR / "ann_final.keras",
+    ]
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        if Path(candidate).exists():
+            model = tf.keras.models.load_model(str(candidate))
+            print(f"[ANN] Model loaded <- {candidate}")
+            return model
+    raise FileNotFoundError(
+        "No trained ANN weights found. Run: "
+        "python -m app.models.ANN_Model.train --data ../database/data/cleaned/Startups_cleaned.csv"
+    )

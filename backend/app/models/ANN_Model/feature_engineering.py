@@ -36,7 +36,7 @@ COL_MAP = {
     "Headquarters (Country)":                   "hq_country",
 }
 
-ARTIFACTS_DIR = Path(__file__).parent.parent / "models" / "artifacts"
+ARTIFACTS_DIR = Path(__file__).parent / "artifacts"
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 
 

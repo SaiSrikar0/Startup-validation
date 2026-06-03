@@ -200,6 +200,9 @@ export default function Predict() {
                     <p className="text-slate-300 font-medium text-sm">{result.company}</p>
                     <p className="text-slate-500 text-xs mt-1">
                       Confidence: <span className={`font-semibold ${confidenceColor(result.confidence)}`}>{result.confidence}</span>
+                      {result.model_name && (
+                        <span className="block mt-1 text-slate-600">Model: {result.model_name}</span>
+                      )}
                     </p>
                   </div>
                 </div>

@@ -61,7 +61,7 @@ export default function Compete() {
     <div className="max-w-5xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-white">Competition Analysis</h1>
-        <p className="text-slate-400 text-sm mt-1">Find your closest competitors from 600+ real startups.</p>
+        <p className="text-slate-400 text-sm mt-1">Find your closest competitors using ML clustering & cosine similarity on 600+ real startups.</p>
       </div>
 
       <div className="grid lg:grid-cols-5 gap-8">
