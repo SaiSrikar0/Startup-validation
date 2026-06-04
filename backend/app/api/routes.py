@@ -13,8 +13,10 @@ from .schemas import (
     StartupListResponse,
     StartupRead,
     StartupUpdate,
+    SupabaseStatusResponse,
 )
 from .store import store
+from ..supabase_client import get_supabase_status
 
 router = APIRouter(prefix="/api", tags=["Startup Analysis"])
 
@@ -27,6 +29,15 @@ router = APIRouter(prefix="/api", tags=["Startup Analysis"])
 )
 def health_check() -> HealthResponse:
     return HealthResponse(status="ok", message="Backend API is ready", total_startups=len(store.list()))
+
+
+@router.get(
+    "/supabase-status",
+    response_model=SupabaseStatusResponse,
+    summary="Check Supabase connectivity",
+)
+def supabase_status() -> SupabaseStatusResponse:
+    return SupabaseStatusResponse(**get_supabase_status())
 
 
 @router.get(
