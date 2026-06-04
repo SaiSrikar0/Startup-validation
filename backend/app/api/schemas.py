@@ -54,6 +54,11 @@ class HealthResponse(BaseModel):
     total_startups: int
 
 
+class SupabaseStatusResponse(BaseModel):
+    available: bool
+    details: str
+
+
 class PredictionRequest(BaseModel):
     company: str = Field(..., min_length=1, max_length=200)
     categories: list[str] = Field(default_factory=list)

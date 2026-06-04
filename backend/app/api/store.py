@@ -3,8 +3,10 @@ from __future__ import annotations
 import csv
 import hashlib
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from threading import RLock
+from typing import Any
 
 from .schemas import (
     CompetitionAnalysisRequest,
@@ -16,6 +18,7 @@ from .schemas import (
     StartupRead,
     StartupUpdate,
 )
+from ..supabase_client import get_supabase_client
 
 
 def _project_root() -> Path:
@@ -30,6 +33,18 @@ def _split_values(value: str | None) -> list[str]:
     if not value:
         return []
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _list_from_db(value: str | list[str] | None) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if item is not None]
+    return [item.strip() for item in str(value).split(",") if item.strip()]
+
+
+def _to_db_list(value: list[str]) -> str:
+    return ", ".join(value)
 
 
 def _slugify(value: str) -> str:
@@ -67,9 +82,143 @@ class StartupStore:
     def __init__(self) -> None:
         self._lock = RLock()
         self._items: dict[str, StartupRecord] = {}
+        self._supabase = get_supabase_client()
+        self._table = self._supabase.table("startups") if self._supabase else None
+        self._prediction_table = self._supabase.table("predictions") if self._supabase else None
+        self._load_data()
+
+    def _load_data(self) -> None:
+        if self._table is not None:
+            try:
+                response = self._table.select("*").execute()
+                if not response.error and response.data:
+                    self._load_rows(response.data)
+                    return
+            except Exception:
+                pass
+
         self._load_seed_data()
 
     def _load_seed_data(self) -> None:
+        self._items = {}
+        seed_file = _seed_path()
+        if not seed_file.exists():
+            return
+
+        with seed_file.open(newline="", encoding="utf-8-sig") as file_handle:
+            reader = csv.DictReader(file_handle)
+            for index, row in enumerate(reader, start=1):
+                company = (row.get("Company") or "").strip()
+                if not company:
+                    continue
+
+                startup_id = _stable_id(company, f"{company}-{index}")
+                self._items[startup_id] = StartupRecord(
+                    startup_id=startup_id,
+                    company=company,
+                    status=(row.get("Satus") or row.get("Status") or "Unknown").strip(),
+                    year_founded=int(float(row.get("Year Founded") or 0)),
+                    description=(row.get("Description") or "").strip(),
+                    categories=_list_from_db(row.get("Categories")),
+                    founders=_list_from_db(row.get("Founders")),
+                    investors=_list_from_db(row.get("Investors")),
+                    funding_rounds=_list_from_db(row.get("Amounts raised in different funding rounds")),
+                    city=(row.get("Headquarters (City)") or None),
+                    state=(row.get("Headquarters (US State)") or None),
+                    country=(row.get("Headquarters (Country)") or None),
+                )
+
+    def _to_db_record(self, record: StartupRecord) -> dict[str, Any]:
+        return {
+            "startup_id": record.startup_id,
+            "company": record.company,
+            "status": record.status,
+            "year_founded": record.year_founded,
+            "description": record.description,
+            "categories": _to_db_list(record.categories),
+            "founders": _to_db_list(record.founders),
+            "investors": _to_db_list(record.investors),
+            "funding_rounds": _to_db_list(record.funding_rounds),
+            "city": record.city,
+            "state": record.state,
+            "country": record.country,
+        }
+
+    def _insert_to_db(self, record: StartupRecord) -> None:
+        if self._table is None:
+            return
+        try:
+            self._table.insert(self._to_db_record(record)).execute()
+        except Exception:
+            pass
+
+    def _update_db(self, record: StartupRecord) -> None:
+        if self._table is None:
+            return
+        try:
+            self._table.update(self._to_db_record(record)).eq("startup_id", record.startup_id).execute()
+        except Exception:
+            pass
+
+    def _delete_from_db(self, startup_id: str) -> None:
+        if self._table is None:
+            return
+        try:
+            self._table.delete().eq("startup_id", startup_id).execute()
+        except Exception:
+            pass
+
+    def _to_prediction_record(self, payload: PredictionRequest, response: PredictionResponse) -> dict[str, Any]:
+        return {
+            "prediction_id": _stable_id(payload.company, datetime.utcnow().isoformat()),
+            "company": payload.company,
+            "status": payload.status,
+            "year_founded": payload.year_founded,
+            "description": payload.description,
+            "categories": _to_db_list(payload.categories),
+            "founders": _to_db_list(payload.founders),
+            "investors": _to_db_list(payload.investors),
+            "funding_rounds": _to_db_list(payload.funding_rounds),
+            "city": payload.city,
+            "state": payload.state,
+            "country": payload.country,
+            "predicted_success": response.predicted_success,
+            "probability": response.probability,
+            "confidence": response.confidence,
+            "model_name": response.model_name,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
+    def _persist_prediction(self, payload: PredictionRequest, response: PredictionResponse) -> None:
+        if self._prediction_table is None:
+            return
+        try:
+            self._prediction_table.insert(self._to_prediction_record(payload, response)).execute()
+        except Exception:
+            pass
+
+    def _load_rows(self, rows: list[dict[str, Any]]) -> None:
+        self._items = {}
+        for row in rows:
+            company = (row.get("company") or row.get("Company") or "").strip()
+            if not company:
+                continue
+
+            startup_id = row.get("startup_id") or _stable_id(company, company)
+            self._items[startup_id] = StartupRecord(
+                startup_id=startup_id,
+                company=company,
+                status=(row.get("status") or row.get("Satus") or "Unknown").strip(),
+                year_founded=int(float(row.get("year_founded") or row.get("Year Founded") or 0)),
+                description=(row.get("description") or row.get("Description") or "").strip(),
+                categories=_list_from_db(row.get("categories") or row.get("Categories")),
+                founders=_list_from_db(row.get("founders") or row.get("Founders")),
+                investors=_list_from_db(row.get("investors") or row.get("Investors")),
+                funding_rounds=_list_from_db(row.get("funding_rounds") or row.get("Amounts raised in different funding rounds")),
+                city=(row.get("city") or row.get("Headquarters (City)") or None),
+                state=(row.get("state") or row.get("Headquarters (US State)") or None),
+                country=(row.get("country") or row.get("Headquarters (Country)") or None),
+            )
         seed_file = _seed_path()
         if not seed_file.exists():
             return
@@ -120,6 +269,7 @@ class StartupStore:
             startup_id = _stable_id(payload.company, f"{payload.company}-{len(self._items) + 1}")
             record = StartupRecord(startup_id=startup_id, **payload.model_dump())
             self._items[startup_id] = record
+            self._insert_to_db(record)
             return record
 
     def update(self, startup_id: str, payload: StartupUpdate) -> StartupRecord | None:
@@ -129,19 +279,29 @@ class StartupStore:
                 return None
 
             updates = payload.model_dump(exclude_unset=True)
+            original_id = record.startup_id
             for key, value in updates.items():
                 if value is not None:
                     setattr(record, key, value)
 
             if "company" in updates and updates["company"]:
                 record.startup_id = _stable_id(record.company, f"{record.company}-{startup_id}")
+                self._items.pop(original_id, None)
 
-            self._items[startup_id] = record
+            self._items[record.startup_id] = record
+            if record.startup_id != original_id:
+                self._insert_to_db(record)
+                self._delete_from_db(original_id)
+            else:
+                self._update_db(record)
             return record
 
     def delete(self, startup_id: str) -> bool:
         with self._lock:
-            return self._items.pop(startup_id, None) is not None
+            exists = self._items.pop(startup_id, None) is not None
+            if exists:
+                self._delete_from_db(startup_id)
+            return exists
 
     def search(
         self,
@@ -170,7 +330,9 @@ class StartupStore:
         try:
             from ..models.ANN_Model.predictor import predict_with_ann
 
-            return predict_with_ann(payload)
+            response = predict_with_ann(payload)
+            self._persist_prediction(payload, response)
+            return response
         except Exception:
             pass
 
@@ -219,7 +381,7 @@ class StartupStore:
         predicted_success = score >= 0.50
         confidence = "high" if score >= 0.75 else "medium" if score >= 0.55 else "low"
 
-        return PredictionResponse(
+        response = PredictionResponse(
             company=payload.company,
             predicted_success=predicted_success,
             probability=round(score, 3),
@@ -227,6 +389,9 @@ class StartupStore:
             factors=factors or ["No strong signals found, using baseline score"],
             model_name="heuristic-fallback",
         )
+
+        self._persist_prediction(payload, response)
+        return response
 
     def analyze_competition(self, payload: CompetitionAnalysisRequest) -> CompetitionAnalysisResponse:
         try:
