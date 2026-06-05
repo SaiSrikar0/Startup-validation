@@ -44,7 +44,7 @@ export default function Startups() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Startups</h1>
-          <p className="text-slate-400 text-sm mt-1">{total.toLocaleString()} total companies</p>
+          <p className="text-slate-400 text-sm mt-1">{(total ?? 0).toLocaleString()} total companies</p>
         </div>
         <Link to="/startups/new" className="btn-primary text-sm">+ Add Startup</Link>
       </div>

@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, HTTPException, status
+
+from .supabase_store import (
+    list_startups as supabase_list_startups,
+    get_startup as supabase_get_startup,
+    create_startup as supabase_create_startup,
+    update_startup as supabase_update_startup,
+    delete_startup as supabase_delete_startup,
+    startup_create_to_db,
+    startup_update_to_db,
+)
 
 from .schemas import (
     CompetitionAnalysisRequest,
@@ -10,17 +20,20 @@ from .schemas import (
     PredictionRequest,
     PredictionResponse,
     StartupCreate,
-    StartupListResponse,
     StartupRead,
     StartupUpdate,
     SupabaseStatusResponse,
 )
+
 from .store import store
 from ..supabase_client import get_supabase_status
 
 router = APIRouter(prefix="/api", tags=["Startup Analysis"])
 
 
+# -------------------------
+# Health Check
+# -------------------------
 @router.get(
     "/health",
     response_model=HealthResponse,
@@ -28,9 +41,16 @@ router = APIRouter(prefix="/api", tags=["Startup Analysis"])
     summary="Health check",
 )
 def health_check() -> HealthResponse:
-    return HealthResponse(status="ok", message="Backend API is ready", total_startups=len(store.list()))
+    return HealthResponse(
+        status="ok",
+        message="Backend API is ready",
+        total_startups=len(supabase_list_startups()),
+    )
 
 
+# -------------------------
+# GET ALL STARTUPS
+# -------------------------
 @router.get(
     "/supabase-status",
     response_model=SupabaseStatusResponse,
@@ -42,45 +62,35 @@ def supabase_status() -> SupabaseStatusResponse:
 
 @router.get(
     "/startups",
-    response_model=StartupListResponse,
-    responses={500: {"model": ErrorResponse}},
     summary="List startups",
 )
-def list_startups(
-    status_filter: str | None = Query(default=None, alias="status"),
-    category: str | None = Query(default=None),
-    country: str | None = Query(default=None),
-    limit: int = Query(default=25, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-) -> StartupListResponse:
-    items, total = store.search(
-        status=status_filter,
-        category=category,
-        country=country,
-        limit=limit,
-        offset=offset,
-    )
-    return StartupListResponse(
-        items=[item.to_read_model() for item in items],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
+def list_startups():
+    return supabase_list_startups()
 
 
+# -------------------------
+# GET STARTUP BY ID
+# -------------------------
 @router.get(
     "/startups/{startup_id}",
-    response_model=StartupRead,
-    responses={404: {"model": ErrorResponse}},
     summary="Get startup by id",
 )
-def get_startup(startup_id: str) -> StartupRead:
-    record = store.get(startup_id)
-    if record is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Startup '{startup_id}' not found")
-    return record.to_read_model()
+def get_startup(startup_id: int):
+
+    startup = supabase_get_startup(startup_id)
+
+    if startup is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Startup not found",
+        )
+
+    return startup
 
 
+# -------------------------
+# CREATE STARTUP
+# -------------------------
 @router.post(
     "/startups",
     response_model=StartupRead,
@@ -88,36 +98,74 @@ def get_startup(startup_id: str) -> StartupRead:
     responses={400: {"model": ErrorResponse}},
     summary="Create startup",
 )
-def create_startup(payload: StartupCreate) -> StartupRead:
-    return store.add(payload).to_read_model()
+def create_startup(payload: StartupCreate):
+
+    db_data = startup_create_to_db(payload)
+
+    startup = supabase_create_startup(db_data)
+
+    if startup is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to create startup",
+        )
+
+    return startup
 
 
+# -------------------------
+# UPDATE STARTUP
+# -------------------------
 @router.put(
     "/startups/{startup_id}",
     response_model=StartupRead,
     responses={404: {"model": ErrorResponse}},
     summary="Update startup",
 )
-def update_startup(startup_id: str, payload: StartupUpdate) -> StartupRead:
-    record = store.update(startup_id, payload)
-    if record is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Startup '{startup_id}' not found")
-    return record.to_read_model()
+def update_startup(startup_id: int, payload: StartupUpdate):
+
+    updates = startup_update_to_db(payload)
+
+    startup = supabase_update_startup(
+        startup_id,
+        updates,
+    )
+
+    if startup is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Startup not found",
+        )
+
+    return startup
 
 
+# -------------------------
+# DELETE STARTUP
+# -------------------------
 @router.delete(
     "/startups/{startup_id}",
-    status_code=status.HTTP_200_OK,
-    response_class=Response,
     responses={404: {"model": ErrorResponse}},
     summary="Delete startup",
 )
-def delete_startup(startup_id: str) -> Response:
-    if not store.delete(startup_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Startup '{startup_id}' not found")
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+def delete_startup(startup_id: int):
+
+    deleted = supabase_delete_startup(startup_id)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Startup not found",
+        )
+
+    return {
+        "message": "Startup deleted successfully"
+    }
 
 
+# -------------------------
+# SUCCESS PREDICTION
+# -------------------------
 @router.post(
     "/predict/success",
     response_model=PredictionResponse,
@@ -128,11 +176,16 @@ def predict_success(payload: PredictionRequest) -> PredictionResponse:
     return store.predict(payload)
 
 
+# -------------------------
+# COMPETITION ANALYSIS
+# -------------------------
 @router.post(
     "/analysis/competition",
     response_model=CompetitionAnalysisResponse,
     responses={422: {"model": ErrorResponse}},
     summary="Run competition analysis",
 )
-def competition_analysis(payload: CompetitionAnalysisRequest) -> CompetitionAnalysisResponse:
+def competition_analysis(
+    payload: CompetitionAnalysisRequest,
+) -> CompetitionAnalysisResponse:
     return store.analyze_competition(payload)

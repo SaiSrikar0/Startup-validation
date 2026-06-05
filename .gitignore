@@ -2,7 +2,11 @@
 # Python / FastAPI
 # =========================
 __pycache__/
-*.py[cod]
+**/__pycache__/
+
+*.pyc
+*.pyo
+*.pyd
 *$py.class
 
 # Virtual environments
@@ -13,22 +17,37 @@ env/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Python build files
 build/
 dist/
 *.egg-info/
+*.egg
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
+.mypy_cache/
 
+# =========================
+# TensorFlow / ML
+# =========================
+*.h5
+*.keras
+*.pkl
+*.joblib
+
+# =========================
 # IDE
+# =========================
 .vscode/
 .idea/
 
+# =========================
 # Logs
+# =========================
 *.log
 
 # =========================
@@ -37,13 +56,8 @@ htmlcov/
 node_modules/
 
 # Build outputs
-build/
-dist/
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+frontend/dist/
+frontend/build/
 
 # Environment variables
 frontend/.env
@@ -51,6 +65,11 @@ frontend/.env.local
 frontend/.env.development.local
 frontend/.env.test.local
 frontend/.env.production.local
+
+# =========================
+# Vite
+# =========================
+.vite/
 
 # =========================
 # OS Files
