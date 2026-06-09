@@ -327,27 +327,63 @@ class StartupStore:
             return filtered[offset : offset + limit], total
 
     def predict(self, payload: PredictionRequest) -> PredictionResponse:
-        try:
-            from ..models.ANN_Model.predictor import predict_with_ann
 
-            response = predict_with_ann(payload)
-            self._persist_prediction(payload, response)
-            return response
-        except Exception:
-            pass
+        print("\n" + "=" * 60)
+        print("PREDICTION REQUEST")
+        print(payload.model_dump())
+        print("=" * 60)
+
+        try:
+            print("Loading ANN predictor...")
+
+            from ..models.ANN_Model.predictor import (
+                predict_with_ann,
+                is_available,
+            )
+
+            print("Checking ANN availability...")
+
+            if is_available():
+                print("ANN AVAILABLE")
+
+                response = predict_with_ann(payload)
+
+                print("ANN PREDICTION SUCCESS")
+                print("Probability:", response.probability)
+                print("Model:", response.model_name)
+
+                self._persist_prediction(payload, response)
+
+                return response
+
+            print("ANN NOT AVAILABLE")
+
+        except Exception as e:
+
+            print("\nANN ERROR OCCURRED")
+            print(type(e).__name__)
+            print(str(e))
+
+            import traceback
+            traceback.print_exc()
+
+        print("\nUSING HEURISTIC FALLBACK MODEL")
 
         score = 0.28
         factors: list[str] = []
 
         status = (payload.status or "").lower()
+
         if status == "operating":
             score += 0.18
             factors.append("Operating status is a positive signal")
+
         elif status in {"exited", "dead"}:
             score -= 0.20
             factors.append("Non-operating status lowers the likelihood of success")
 
         if payload.year_founded is not None:
+
             if payload.year_founded >= 2011:
                 score += 0.08
                 factors.append("Recent founding year supports momentum")
@@ -357,40 +393,61 @@ class StartupStore:
         if payload.categories:
             category_score = min(len(payload.categories), 4) * 0.04
             score += category_score
-            factors.append(f"Category coverage contributes {category_score:.2f} to the score")
+            factors.append(
+                f"Category coverage contributes {category_score:.2f} to the score"
+            )
 
         if payload.founders:
             founder_score = min(len(payload.founders), 5) * 0.02
             score += founder_score
-            factors.append(f"Founder team size contributes {founder_score:.2f} to the score")
+            factors.append(
+                f"Founder team size contributes {founder_score:.2f} to the score"
+            )
 
         if payload.investors:
             investor_score = min(len(payload.investors), 5) * 0.03
             score += investor_score
-            factors.append(f"Investor backing contributes {investor_score:.2f} to the score")
+            factors.append(
+                f"Investor backing contributes {investor_score:.2f} to the score"
+            )
 
         if (payload.country or "").lower() == "usa":
             score += 0.05
-            factors.append("US headquarters adds a small location advantage")
+            factors.append(
+                "US headquarters adds a small location advantage"
+            )
 
         if payload.description:
             score += 0.03
-            factors.append("A filled description improves feature completeness")
+            factors.append(
+                "A filled description improves feature completeness"
+            )
 
         score = max(0.0, min(score, 0.99))
+
         predicted_success = score >= 0.50
-        confidence = "high" if score >= 0.75 else "medium" if score >= 0.55 else "low"
+
+        confidence = (
+            "high"
+            if score >= 0.75
+            else "medium"
+            if score >= 0.55
+            else "low"
+        )
 
         response = PredictionResponse(
             company=payload.company,
             predicted_success=predicted_success,
             probability=round(score, 3),
             confidence=confidence,
-            factors=factors or ["No strong signals found, using baseline score"],
+            factors=factors or [
+                "No strong signals found, using baseline score"
+            ],
             model_name="heuristic-fallback",
         )
 
         self._persist_prediction(payload, response)
+
         return response
 
     def analyze_competition(self, payload: CompetitionAnalysisRequest) -> CompetitionAnalysisResponse:
